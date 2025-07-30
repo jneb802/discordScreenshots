@@ -7,7 +7,7 @@ public static class RemoveDamageFlashOnDeath
     [HarmonyPostfix]
     static bool Prefix(Player __instance, HitData hit)
     {
-        if (hit.GetTotalDamage() >= __instance.GetMaxHealth())
+        if (hit.GetTotalDamage() >= __instance.GetHealth())
         {
             return false;
         }
