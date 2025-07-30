@@ -1,0 +1,12 @@
+# Shell scripts
+*.sh
+h
+# Build outputs
+bin/
+obj/
+
+# Environment files
+Environment.props 
+
+monitor-logs.sh
+build.sh

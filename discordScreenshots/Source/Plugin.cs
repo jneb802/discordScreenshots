@@ -5,15 +5,18 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
+using Jotunn.Managers;
+using UnityEngine;
+using Jotunn.Utils;
 
-namespace Template
+namespace discordScreenshots
 {
     [BepInPlugin(ModGUID, ModName, ModVersion)]
-    public class TemplatePlugin : BaseUnityPlugin
+    public class discordScreenshotsPlugin : BaseUnityPlugin
     {
-        private const string ModName = "Template";
+        private const string ModName = "discordScreenshots";
         private const string ModVersion = "1.0.0";
-        private const string Author = "modAuthorName";
+        private const string Author = "warpalicious";
         private const string ModGUID = Author + "." + ModName;
         private static string ConfigFileName = ModGUID + ".cfg";
         private static string ConfigFileFullPath = BepInEx.Paths.ConfigPath + Path.DirectorySeparatorChar + ConfigFileName;
@@ -22,12 +25,28 @@ namespace Template
 
         public static readonly ManualLogSource TemplateLogger = BepInEx.Logging.Logger.CreateLogSource(ModName);
 
+        public static AssetBundle assetBundle;
+
         public void Awake()
         {
-            BepinexConfiguration.Instance.Config = Config;
             Assembly assembly = Assembly.GetExecutingAssembly();
             HarmonyInstance.PatchAll(assembly);
             SetupWatcher();
+
+            LoadAssetBundle();
+
+            BepinexConfiguration.GenerateConfigs(Config);
+
+            // // Initialize our custom pieces with asset bundle
+            // PrefabUtils.Initialize();
+        }
+
+        public static void LoadAssetBundle()
+        {
+            assetBundle = AssetUtils.LoadAssetBundleFromResources(
+                "discordscreenshots",
+                Assembly.GetExecutingAssembly()
+            );
         }
 
         private void OnDestroy()

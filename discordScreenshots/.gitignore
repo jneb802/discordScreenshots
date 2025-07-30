@@ -17,3 +17,10 @@ logoutput.log
 # Temporary files
 *.tmp
 *.temp 
+
+# Shell scripts
+*.sh
+h
+
+monitor-logs.sh
+build.sh 
