@@ -48,7 +48,7 @@ namespace discordScreenshots.Patches
                         string formattedMessage = $"💬 **{playerName}**: {message}";
 
                         await SimpleDiscordWebhook.SendQuickMessageAsync(
-                            BepinexConfiguration.hot.Value,
+                            BepinexConfiguration.WebhookURL.Value,
                             formattedMessage,
                             "Valheim Console"
                         );

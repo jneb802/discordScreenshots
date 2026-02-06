@@ -114,7 +114,7 @@ namespace discordScreenshots.Patches
                 byte[] pngData = webhook.ProcessScreenshot(PlayerDeathScreenshotPatch.storedDeathScreenshot);
                 
                 // Prepare upload data
-                string deathMessage = $"**{PlayerDeathScreenshotPatch.storedPlayerName}** {BepinexConfiguration.DeathMessage.Value}";
+                string deathMessage = $"**{PlayerDeathScreenshotPatch.storedPlayerName}** {BepinexConfiguration.GetRandomDeathMessage()}";
                 string filename = $"{PlayerDeathScreenshotPatch.storedPlayerName}_death_{PlayerDeathScreenshotPatch.storedDeathTime:yyyy-MM-dd_HH-mm-ss}.png";
                 
                 // Upload to Discord using existing method (fire and forget)
