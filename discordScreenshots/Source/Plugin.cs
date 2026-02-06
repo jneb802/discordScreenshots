@@ -15,7 +15,7 @@ namespace discordScreenshots
     public class discordScreenshotsPlugin : BaseUnityPlugin
     {
         private const string ModName = "discordScreenshots";
-        private const string ModVersion = "1.0.0";
+        private const string ModVersion = "1.4.0";
         private const string Author = "warpalicious";
         private const string ModGUID = Author + "." + ModName;
         private static string ConfigFileName = ModGUID + ".cfg";
@@ -33,7 +33,7 @@ namespace discordScreenshots
             HarmonyInstance.PatchAll(assembly);
             SetupWatcher();
 
-            LoadAssetBundle();
+            // LoadAssetBundle();
 
             BepinexConfiguration.GenerateConfigs(Config);
 
