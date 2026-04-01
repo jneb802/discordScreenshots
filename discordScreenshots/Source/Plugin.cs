@@ -12,10 +12,11 @@ using Jotunn.Utils;
 namespace discordScreenshots
 {
     [BepInPlugin(ModGUID, ModName, ModVersion)]
+    [BepInDependency(Jotunn.Main.ModGuid)]
     public class discordScreenshotsPlugin : BaseUnityPlugin
     {
         private const string ModName = "discordScreenshots";
-        private const string ModVersion = "1.4.0";
+        private const string ModVersion = "1.5.0";
         private const string Author = "warpalicious";
         private const string ModGUID = Author + "." + ModName;
         private static string ConfigFileName = ModGUID + ".cfg";
