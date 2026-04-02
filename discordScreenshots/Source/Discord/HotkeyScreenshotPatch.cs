@@ -25,16 +25,31 @@ namespace discordScreenshots.Patches
 
                     Debug.Log($"HotkeyScreenshotPatch: {playerName} pressed screenshot hotkey");
 
-                    // Take screenshot using existing infrastructure
-                    string screenshotMessage = $"📸 **{playerName}** captured this screenshot!";
+                    // Use player capture webhook if set, otherwise fall back to main webhook
+                    bool usePlayerCaptureWebhook = !string.IsNullOrEmpty(BepinexConfiguration.HotkeyScreenshotWebhookURL.Value);
+
+                    string webhookUrl = usePlayerCaptureWebhook
+                        ? BepinexConfiguration.HotkeyScreenshotWebhookURL.Value
+                        : BepinexConfiguration.WebhookURL.Value;
+                    string webhookUsername = usePlayerCaptureWebhook
+                        ? BepinexConfiguration.HotkeyScreenshotWebhookUsername.Value
+                        : BepinexConfiguration.WebhookUsername.Value;
+                    string webhookAvatarUrl = usePlayerCaptureWebhook
+                        ? BepinexConfiguration.HotkeyScreenshotWebhookAvatarURL.Value
+                        : BepinexConfiguration.WebhookAvatarURL.Value;
+                    string messageText = usePlayerCaptureWebhook
+                        ? BepinexConfiguration.HotkeyScreenshotMessage.Value
+                        : "captured this screenshot!";
+
+                    string screenshotMessage = $"📸 **{playerName}** {messageText}";
                     string filename = $"{playerName}_screenshot_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.png";
 
                     // Fire and forget
                     _ = SimpleDiscordWebhook.SendQuickScreenshotAsync(
-                        BepinexConfiguration.WebhookURL.Value,
+                        webhookUrl,
                         screenshotMessage,
-                        BepinexConfiguration.WebhookUsername.Value,
-                        BepinexConfiguration.WebhookAvatarURL.Value,
+                        webhookUsername,
+                        webhookAvatarUrl,
                         filename
                     );
                 }
