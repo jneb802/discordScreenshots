@@ -111,18 +111,21 @@ namespace discordScreenshots.Patches
                 );
                 
                 // Process screenshot using existing method
-                byte[] pngData = webhook.ProcessScreenshot(PlayerDeathScreenshotPatch.storedDeathScreenshot);
+                ScreenshotUploadData uploadData = webhook.ProcessScreenshotForUpload(PlayerDeathScreenshotPatch.storedDeathScreenshot);
                 
                 // Prepare upload data
                 string deathMessage = $"**{PlayerDeathScreenshotPatch.storedPlayerName}** {BepinexConfiguration.GetRandomDeathMessage()}";
-                string filename = $"{PlayerDeathScreenshotPatch.storedPlayerName}_death_{PlayerDeathScreenshotPatch.storedDeathTime:yyyy-MM-dd_HH-mm-ss}.png";
+                string filename = SimpleDiscordWebhook.CreateScreenshotFilename(
+                    $"{PlayerDeathScreenshotPatch.storedPlayerName}_death",
+                    PlayerDeathScreenshotPatch.storedDeathTime
+                );
                 
                 // Upload to Discord using existing method (fire and forget)
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await webhook.SendFileAsync(pngData, filename, deathMessage);
+                        await webhook.SendFileAsync(uploadData.Data, filename, deathMessage, uploadData.ContentType);
                         Debug.Log($"Death screenshot uploaded successfully for {PlayerDeathScreenshotPatch.storedPlayerName}");
                     }
                     catch (Exception ex)
@@ -149,4 +152,4 @@ namespace discordScreenshots.Patches
             }
         }
     }
-} 
+}

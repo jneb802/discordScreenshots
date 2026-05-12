@@ -128,7 +128,10 @@ namespace discordScreenshots.Patches
                         "Valheim Screenshots"
                     );
 
-                    string filename = $"{playerName}_screenshot_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.png";
+                    string filename = SimpleDiscordWebhook.CreateScreenshotFilename(
+                        $"{playerName}_screenshot",
+                        DateTime.Now
+                    );
 
                     // Capture screenshot synchronously on main thread
                     var screenshot = ScreenCapture.CaptureScreenshotAsTexture();
@@ -137,14 +140,7 @@ namespace discordScreenshots.Patches
                         throw new Exception("Failed to capture screenshot");
                     }
 
-                    // Convert to PNG on main thread (Unity requirement)
-                    byte[] pngData = screenshot.EncodeToPNG();
-                    UnityEngine.Object.DestroyImmediate(screenshot);
-
-                    if (pngData == null || pngData.Length == 0)
-                    {
-                        throw new Exception("Failed to encode screenshot to PNG");
-                    }
+                    ScreenshotUploadData uploadData = webhook.ProcessScreenshotForUpload(screenshot);
 
                     args.Context?.AddString($"Screenshot captured, uploading to Discord...");
 
@@ -153,7 +149,7 @@ namespace discordScreenshots.Patches
                     {
                         try
                         {
-                            await webhook.SendFileAsync(pngData, filename, message);
+                            await webhook.SendFileAsync(uploadData.Data, filename, message, uploadData.ContentType);
                             UnityEngine.Debug.Log($"Screenshot uploaded to Discord for {playerName}");
                         }
                         catch (Exception ex)
@@ -170,4 +166,4 @@ namespace discordScreenshots.Patches
             }));
         }
     }
-} 
+}

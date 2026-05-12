@@ -42,7 +42,10 @@ namespace discordScreenshots.Patches
                         : "captured this screenshot!";
 
                     string screenshotMessage = $"📸 **{playerName}** {messageText}";
-                    string filename = $"{playerName}_screenshot_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.png";
+                    string filename = SimpleDiscordWebhook.CreateScreenshotFilename(
+                        $"{playerName}_screenshot",
+                        DateTime.Now
+                    );
 
                     // Fire and forget
                     _ = SimpleDiscordWebhook.SendQuickScreenshotAsync(
@@ -60,4 +63,4 @@ namespace discordScreenshots.Patches
             }
         }
     }
-} 
+}

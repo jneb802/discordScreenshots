@@ -14,6 +14,13 @@ namespace discordScreenshots;
 /// </summary>
 public class SimpleDiscordWebhook
 {
+    private const int LargeScreenshotPixelThreshold = 4_000_000;
+    private const int LargeScreenshotJpegQuality = 90;
+
+    private static ScreenshotEncoding _startupScreenshotEncoding = ScreenshotEncoding.Png;
+    private static int _startupResolutionWidth;
+    private static int _startupResolutionHeight;
+
     private readonly string _webhookUrl;
     private readonly string? _username;
     private readonly string? _avatarUrl;
@@ -34,6 +41,41 @@ public class SimpleDiscordWebhook
         _webhookUrl = webhookUrl;
         _username = username;
         _avatarUrl = avatarUrl;
+    }
+
+    public static void ConfigureScreenshotEncodingForStartupResolution()
+    {
+        int width = Screen.width;
+        int height = Screen.height;
+
+        if (width <= 0 || height <= 0)
+        {
+            Resolution currentResolution = Screen.currentResolution;
+            width = currentResolution.width;
+            height = currentResolution.height;
+        }
+
+        ConfigureScreenshotEncoding(width, height);
+    }
+
+    public static void ConfigureScreenshotEncoding(int width, int height)
+    {
+        _startupResolutionWidth = Math.Max(0, width);
+        _startupResolutionHeight = Math.Max(0, height);
+
+        long pixelCount = (long)_startupResolutionWidth * _startupResolutionHeight;
+        _startupScreenshotEncoding = pixelCount >= LargeScreenshotPixelThreshold
+            ? ScreenshotEncoding.Jpeg
+            : ScreenshotEncoding.Png;
+
+        UnityEngine.Debug.Log(
+            $"DiscordScreenshots: startup resolution {_startupResolutionWidth}x{_startupResolutionHeight}; " +
+            $"using {GetScreenshotFormatName()} for screenshot uploads.");
+    }
+
+    public static string CreateScreenshotFilename(string baseName, DateTime timestamp)
+    {
+        return $"{baseName}_{timestamp:yyyy-MM-dd_HH-mm-ss}.{GetScreenshotExtension()}";
     }
 
     /// <summary>
@@ -79,15 +121,7 @@ public class SimpleDiscordWebhook
     {
         try
         {
-            // Generate filename if not provided
-            if (string.IsNullOrEmpty(filename))
-            {
-                filename = $"valheim_screenshot_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.png";
-            }
-            else if (!filename!.EndsWith(".png"))
-            {
-                filename += ".png";
-            }
+            filename = NormalizeScreenshotFilename(filename);
 
             // Step 1: Capture screenshot on main thread (fast ~5ms)
             var screenshot = ScreenCapture.CaptureScreenshotAsTexture();
@@ -97,23 +131,16 @@ public class SimpleDiscordWebhook
                 throw new Exception("Failed to capture screenshot - returned null texture");
             }
 
-            // Step 2: Encode to PNG on main thread (Unity requirement - but still relatively fast)
-            byte[] pngData = screenshot.EncodeToPNG();
-            
-            // Step 3: Clean up texture immediately (main thread requirement)
-            UnityEngine.Object.DestroyImmediate(screenshot);
-            
-            if (pngData == null || pngData.Length == 0)
-            {
-                throw new Exception("Failed to encode screenshot to PNG");
-            }
+            // Step 2: Encode on main thread. Unity texture encoding must run here.
+            ScreenshotUploadData uploadData = ProcessScreenshotForUpload(screenshot);
 
-            UnityEngine.Debug.Log($"Screenshot captured and encoded - {pngData.Length} bytes, uploading...");
+            UnityEngine.Debug.Log(
+                $"Screenshot captured and encoded as {uploadData.FormatName} - {uploadData.Data.Length} bytes, uploading...");
 
             // Step 4: Upload to Discord on background thread (network operation)
             await Task.Run(async () =>
             {
-                await SendFileAsync(pngData, filename, message);
+                await SendFileAsync(uploadData.Data, filename, message, uploadData.ContentType);
             });
         }
         catch (Exception ex)
@@ -137,13 +164,40 @@ public class SimpleDiscordWebhook
 
     public byte[] ProcessScreenshot(Texture2D screenshot)
     {
-        // Step 2: Encode to PNG on main thread (Unity requirement - but still relatively fast)
-        byte[] pngData = screenshot.EncodeToPNG();
+        return ProcessScreenshotForUpload(screenshot).Data;
+    }
+
+    public ScreenshotUploadData ProcessScreenshotForUpload(Texture2D screenshot)
+    {
+        byte[] encodedData;
+        string extension;
+        string contentType;
+        string formatName;
+
+        if (_startupScreenshotEncoding == ScreenshotEncoding.Jpeg)
+        {
+            encodedData = screenshot.EncodeToJPG(LargeScreenshotJpegQuality);
+            extension = "jpg";
+            contentType = "image/jpeg";
+            formatName = $"JPEG quality {LargeScreenshotJpegQuality}";
+        }
+        else
+        {
+            encodedData = screenshot.EncodeToPNG();
+            extension = "png";
+            contentType = "image/png";
+            formatName = "PNG";
+        }
 
         // Step 3: Clean up texture immediately (main thread requirement)
         UnityEngine.Object.DestroyImmediate(screenshot);
 
-        return pngData;
+        if (encodedData == null || encodedData.Length == 0)
+        {
+            throw new Exception($"Failed to encode screenshot to {formatName}");
+        }
+
+        return new ScreenshotUploadData(encodedData, extension, contentType, formatName);
     }
 
     /// <summary>
@@ -153,7 +207,7 @@ public class SimpleDiscordWebhook
     /// <param name="filename">The filename for the attachment</param>
     /// <param name="message">Optional message to send with the file</param>
     /// <returns>Task representing the async operation</returns>
-    public async Task SendFileAsync(byte[] fileData, string filename, string? message = null)
+    public async Task SendFileAsync(byte[] fileData, string filename, string? message = null, string contentType = "image/png")
     {
         if (fileData == null || fileData.Length == 0)
         {
@@ -171,7 +225,7 @@ public class SimpleDiscordWebhook
         using (var memoryStream = new MemoryStream())
         {
             // Build multipart form data
-            await WriteMultipartFormDataAsync(memoryStream, boundary, fileData, filename, message);
+            await WriteMultipartFormDataAsync(memoryStream, boundary, fileData, filename, message, contentType);
             
             byte[] formData = memoryStream.ToArray();
             
@@ -346,7 +400,7 @@ public class SimpleDiscordWebhook
     /// <param name="fileData">The file data</param>
     /// <param name="filename">The filename</param>
     /// <param name="message">Optional message</param>
-    private async Task WriteMultipartFormDataAsync(Stream stream, string boundary, byte[] fileData, string filename, string? message)
+    private async Task WriteMultipartFormDataAsync(Stream stream, string boundary, byte[] fileData, string filename, string? message, string contentType)
     {
         string newLine = "\r\n";
         byte[] boundaryBytes = Encoding.UTF8.GetBytes($"--{boundary}{newLine}");
@@ -355,7 +409,7 @@ public class SimpleDiscordWebhook
         await stream.WriteAsync(boundaryBytes, 0, boundaryBytes.Length);
         
         string fileHeader = $"Content-Disposition: form-data; name=\"files[0]\"; filename=\"{filename}\"{newLine}" +
-                           $"Content-Type: image/png{newLine}{newLine}";
+                           $"Content-Type: {contentType}{newLine}{newLine}";
         byte[] fileHeaderBytes = Encoding.UTF8.GetBytes(fileHeader);
         await stream.WriteAsync(fileHeaderBytes, 0, fileHeaderBytes.Length);
         
@@ -452,6 +506,67 @@ public class SimpleDiscordWebhook
         SendQuickScreenshotAsync(webhookUrl, message, username, avatarUrl, filename)
             .ConfigureAwait(false).GetAwaiter().GetResult();
     }
+
+    private static string NormalizeScreenshotFilename(string? filename)
+    {
+        string extension = GetScreenshotExtension();
+
+        if (string.IsNullOrEmpty(filename))
+        {
+            return $"valheim_screenshot_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.{extension}";
+        }
+
+        string safeFilename = filename!;
+        string currentExtension = Path.GetExtension(safeFilename);
+
+        if (string.IsNullOrEmpty(currentExtension))
+        {
+            return $"{safeFilename}.{extension}";
+        }
+
+        if (currentExtension.Equals(".png", StringComparison.OrdinalIgnoreCase) ||
+            currentExtension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) ||
+            currentExtension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.ChangeExtension(safeFilename, extension) ?? $"{safeFilename}.{extension}";
+        }
+
+        return safeFilename;
+    }
+
+    private static string GetScreenshotExtension()
+    {
+        return _startupScreenshotEncoding == ScreenshotEncoding.Jpeg ? "jpg" : "png";
+    }
+
+    private static string GetScreenshotFormatName()
+    {
+        return _startupScreenshotEncoding == ScreenshotEncoding.Jpeg
+            ? $"JPEG quality {LargeScreenshotJpegQuality}"
+            : "PNG";
+    }
+}
+
+public sealed class ScreenshotUploadData
+{
+    public ScreenshotUploadData(byte[] data, string extension, string contentType, string formatName)
+    {
+        Data = data;
+        Extension = extension;
+        ContentType = contentType;
+        FormatName = formatName;
+    }
+
+    public byte[] Data { get; }
+    public string Extension { get; }
+    public string ContentType { get; }
+    public string FormatName { get; }
+}
+
+internal enum ScreenshotEncoding
+{
+    Png,
+    Jpeg
 }
 
 /// <summary>
@@ -473,4 +588,4 @@ internal class SimpleWebhookPayload
     /// Override the default avatar of the webhook.
     /// </summary>
     public string? avatar_url { get; set; }
-} 
+}
