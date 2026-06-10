@@ -16,12 +16,13 @@ public class SimpleDiscordWebhook
 {
     private const int LargeScreenshotPixelThreshold = 4_000_000;
     private const int LargeScreenshotJpegQuality = 90;
+    private const int WebhookRequestTimeoutMilliseconds = 15000;
 
     private static ScreenshotEncoding _startupScreenshotEncoding = ScreenshotEncoding.Png;
     private static int _startupResolutionWidth;
     private static int _startupResolutionHeight;
 
-    private readonly string _webhookUrl;
+    private readonly Uri _webhookUri;
     private readonly string? _username;
     private readonly string? _avatarUrl;
 
@@ -33,14 +34,14 @@ public class SimpleDiscordWebhook
     /// <param name="avatarUrl">Optional avatar URL for the webhook</param>
     public SimpleDiscordWebhook(string webhookUrl, string? username = null, string? avatarUrl = null)
     {
-        if (string.IsNullOrEmpty(webhookUrl))
+        if (!TryNormalizeWebhookUrl(webhookUrl, out Uri webhookUri, out string reason))
         {
-            throw new ArgumentException("Webhook URL cannot be null or empty", nameof(webhookUrl));
+            throw new ArgumentException($"Invalid webhook URL: {reason}", nameof(webhookUrl));
         }
 
-        _webhookUrl = webhookUrl;
-        _username = username;
-        _avatarUrl = avatarUrl;
+        _webhookUri = webhookUri;
+        _username = NormalizeOptionalText(username);
+        _avatarUrl = NormalizeOptionalText(avatarUrl);
     }
 
     public static void ConfigureScreenshotEncodingForStartupResolution()
@@ -245,7 +246,7 @@ public class SimpleDiscordWebhook
             byte[] byteArray = Encoding.UTF8.GetBytes(jsonPayload);
 
             // Create the web request
-            WebRequest request = WebRequest.Create(_webhookUrl);
+            WebRequest request = CreateWebhookRequest();
             request.Method = "POST";
             request.ContentType = "application/json";
             request.ContentLength = byteArray.Length;
@@ -324,7 +325,7 @@ public class SimpleDiscordWebhook
         try
         {
             // Create the web request for multipart form data
-            WebRequest request = WebRequest.Create(_webhookUrl);
+            WebRequest request = CreateWebhookRequest();
             request.Method = "POST";
             request.ContentType = $"multipart/form-data; boundary={boundary}";
             request.ContentLength = formData.Length;
@@ -449,6 +450,19 @@ public class SimpleDiscordWebhook
         await stream.WriteAsync(closingBoundary, 0, closingBoundary.Length);
     }
 
+    private WebRequest CreateWebhookRequest()
+    {
+        WebRequest request = WebRequest.Create(_webhookUri);
+        request.Timeout = WebhookRequestTimeoutMilliseconds;
+
+        if (request is HttpWebRequest httpRequest)
+        {
+            httpRequest.ReadWriteTimeout = WebhookRequestTimeoutMilliseconds;
+        }
+
+        return request;
+    }
+
     /// <summary>
     /// Create a webhook instance for quick one-off messages.
     /// </summary>
@@ -532,6 +546,67 @@ public class SimpleDiscordWebhook
         }
 
         return safeFilename;
+    }
+
+    private static bool TryNormalizeWebhookUrl(string? webhookUrl, out Uri webhookUri, out string reason)
+    {
+        webhookUri = null!;
+
+        if (webhookUrl == null)
+        {
+            reason = "URL cannot be empty";
+            return false;
+        }
+
+        string trimmedUrl = webhookUrl.Trim();
+        if (trimmedUrl.Length == 0)
+        {
+            reason = "URL cannot be empty";
+            return false;
+        }
+
+        for (int index = 0; index < trimmedUrl.Length; index++)
+        {
+            if (char.IsControl(trimmedUrl[index]))
+            {
+                reason = "URL contains control characters";
+                return false;
+            }
+        }
+
+        Uri? parsedUri;
+        if (!Uri.TryCreate(trimmedUrl, UriKind.Absolute, out parsedUri) || parsedUri == null)
+        {
+            reason = "URL must be an absolute HTTPS URL";
+            return false;
+        }
+
+        if (!string.Equals(parsedUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            reason = "URL must use HTTPS";
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(parsedUri.Host))
+        {
+            reason = "URL must include a host";
+            return false;
+        }
+
+        webhookUri = parsedUri;
+        reason = string.Empty;
+        return true;
+    }
+
+    private static string? NormalizeOptionalText(string? value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        string trimmedValue = value.Trim();
+        return trimmedValue.Length == 0 ? null : trimmedValue;
     }
 
     private static string GetScreenshotExtension()
