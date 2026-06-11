@@ -48,9 +48,9 @@ namespace discordScreenshots.Patches
             try
             {
                 SimpleDiscordWebhook webhook = new SimpleDiscordWebhook(
-                    BepinexConfiguration.WebhookURL.Value,
-                    BepinexConfiguration.WebhookUsername.Value,
-                    BepinexConfiguration.WebhookAvatarURL.Value
+                    BepinexConfiguration.GetWebhookURL(),
+                    BepinexConfiguration.GetWebhookUsername(),
+                    BepinexConfiguration.GetWebhookAvatarURL()
                 );
 
                 ScreenshotUploadData uploadData = webhook.ProcessScreenshotForUpload(screenshot);

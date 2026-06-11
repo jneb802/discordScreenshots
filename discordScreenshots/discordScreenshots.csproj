@@ -6,8 +6,8 @@
     <TargetFramework>net472</TargetFramework>
     <RootNamespace>discordScreenshots</RootNamespace>
     <AssemblyName>discordScreenshots</AssemblyName>
-    <AssemblyVersion>1.6.4</AssemblyVersion>
-    <Version>1.6.4</Version>
+    <AssemblyVersion>1.6.5</AssemblyVersion>
+    <Version>1.6.5</Version>
     <LangVersion>10.0</LangVersion>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
