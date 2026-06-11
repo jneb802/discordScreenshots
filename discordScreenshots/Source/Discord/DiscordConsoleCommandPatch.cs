@@ -48,7 +48,7 @@ namespace discordScreenshots.Patches
                         string formattedMessage = $"💬 **{playerName}**: {message}";
 
                         await SimpleDiscordWebhook.SendQuickMessageAsync(
-                            BepinexConfiguration.WebhookURL.Value,
+                            BepinexConfiguration.GetWebhookURL(),
                             formattedMessage,
                             "Valheim Console"
                         );
@@ -81,7 +81,7 @@ namespace discordScreenshots.Patches
                     try
                     {
                         await SimpleDiscordWebhook.SendQuickMessageAsync(
-                            BepinexConfiguration.WebhookURL.Value,
+                            BepinexConfiguration.GetWebhookURL(),
                             $"🧪 Discord webhook test from **{playerName}** - Connection working!",
                             "Valheim Test Bot"
                         );
@@ -124,7 +124,7 @@ namespace discordScreenshots.Patches
                 {
                     // Create webhook instance
                     var webhook = new SimpleDiscordWebhook(
-                        BepinexConfiguration.WebhookURL.Value,
+                        BepinexConfiguration.GetWebhookURL(),
                         "Valheim Screenshots"
                     );
 

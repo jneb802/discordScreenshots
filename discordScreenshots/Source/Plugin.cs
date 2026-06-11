@@ -15,7 +15,7 @@ namespace discordScreenshots
     public class discordScreenshotsPlugin : BaseUnityPlugin
     {
         private const string ModName = "discordScreenshots";
-        private const string ModVersion = "1.6.4";
+        private const string ModVersion = "1.6.5";
         private const string Author = "warpalicious";
         private const string ModGUID = Author + "." + ModName;
 

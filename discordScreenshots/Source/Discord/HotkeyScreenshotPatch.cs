@@ -27,17 +27,18 @@ namespace discordScreenshots.Patches
                     Debug.Log($"HotkeyScreenshotPatch: {playerName} pressed screenshot hotkey");
 
                     // Use player capture webhook if set, otherwise fall back to main webhook
-                    bool usePlayerCaptureWebhook = !string.IsNullOrEmpty(BepinexConfiguration.HotkeyScreenshotWebhookURL.Value);
+                    string playerCaptureWebhookUrl = BepinexConfiguration.GetHotkeyScreenshotWebhookURL();
+                    bool usePlayerCaptureWebhook = !string.IsNullOrEmpty(playerCaptureWebhookUrl);
 
                     string webhookUrl = usePlayerCaptureWebhook
-                        ? BepinexConfiguration.HotkeyScreenshotWebhookURL.Value
-                        : BepinexConfiguration.WebhookURL.Value;
+                        ? playerCaptureWebhookUrl
+                        : BepinexConfiguration.GetWebhookURL();
                     string webhookUsername = usePlayerCaptureWebhook
-                        ? BepinexConfiguration.HotkeyScreenshotWebhookUsername.Value
-                        : BepinexConfiguration.WebhookUsername.Value;
+                        ? BepinexConfiguration.GetHotkeyScreenshotWebhookUsername()
+                        : BepinexConfiguration.GetWebhookUsername();
                     string webhookAvatarUrl = usePlayerCaptureWebhook
-                        ? BepinexConfiguration.HotkeyScreenshotWebhookAvatarURL.Value
-                        : BepinexConfiguration.WebhookAvatarURL.Value;
+                        ? BepinexConfiguration.GetHotkeyScreenshotWebhookAvatarURL()
+                        : BepinexConfiguration.GetWebhookAvatarURL();
                     string messageText = usePlayerCaptureWebhook
                         ? BepinexConfiguration.HotkeyScreenshotMessage.Value
                         : "captured this screenshot!";
