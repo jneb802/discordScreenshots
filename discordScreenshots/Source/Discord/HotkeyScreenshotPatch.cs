@@ -1,5 +1,6 @@
 using HarmonyLib;
 using System;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace discordScreenshots.Patches
@@ -47,8 +48,7 @@ namespace discordScreenshots.Patches
                         DateTime.Now
                     );
 
-                    // Fire and forget
-                    _ = SimpleDiscordWebhook.SendQuickScreenshotAsync(
+                    _ = SendHotkeyScreenshotAsync(
                         webhookUrl,
                         screenshotMessage,
                         webhookUsername,
@@ -60,6 +60,29 @@ namespace discordScreenshots.Patches
             catch (Exception ex)
             {
                 Debug.LogError($"HotkeyScreenshotPatch: Error: {ex.Message}");
+            }
+        }
+
+        private static async Task SendHotkeyScreenshotAsync(
+            string webhookUrl,
+            string screenshotMessage,
+            string webhookUsername,
+            string webhookAvatarUrl,
+            string filename)
+        {
+            try
+            {
+                await SimpleDiscordWebhook.SendQuickScreenshotAsync(
+                    webhookUrl,
+                    screenshotMessage,
+                    webhookUsername,
+                    webhookAvatarUrl,
+                    filename
+                );
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"HotkeyScreenshotPatch: Failed to upload screenshot: {ex.Message}");
             }
         }
     }

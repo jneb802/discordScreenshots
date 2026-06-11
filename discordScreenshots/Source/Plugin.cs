@@ -6,6 +6,7 @@ using HarmonyLib;
 using Jotunn.Managers;
 using UnityEngine;
 using Jotunn.Utils;
+using discordScreenshots.Patches;
 
 namespace discordScreenshots
 {
@@ -14,7 +15,7 @@ namespace discordScreenshots
     public class discordScreenshotsPlugin : BaseUnityPlugin
     {
         private const string ModName = "discordScreenshots";
-        private const string ModVersion = "1.6.1";
+        private const string ModVersion = "1.6.4";
         private const string Author = "warpalicious";
         private const string ModGUID = Author + "." + ModName;
 
@@ -49,6 +50,11 @@ namespace discordScreenshots
         private void OnDestroy()
         {
             Config.Save();
+        }
+
+        private void OnApplicationQuit()
+        {
+            PlayerDeathScreenshotPatch.UploadStoredDeathScreenshot("application quit", waitForUpload: true);
         }
     }
 }

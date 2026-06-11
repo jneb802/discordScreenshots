@@ -9,8 +9,8 @@ namespace discordScreenshots.Patches
     public static class PlayerDeathScreenshotPatch
     {
         // Store captured death screenshot
-        internal static Texture2D storedDeathScreenshot = null;
-        internal static string storedPlayerName = null;
+        internal static Texture2D? storedDeathScreenshot = null;
+        internal static string? storedPlayerName = null;
         internal static DateTime storedDeathTime;
 
         internal static IEnumerator CaptureDeathScreenshotCoroutine(string playerName)
@@ -23,12 +23,77 @@ namespace discordScreenshots.Patches
             yield return new WaitForSeconds(0.1f);
             
             // Quick capture and store using existing method
-            var webhook = new SimpleDiscordWebhook(BepinexConfiguration.WebhookURL.Value);
-            storedDeathScreenshot = webhook.CaptureScreenshot();
+            storedDeathScreenshot = SimpleDiscordWebhook.CaptureScreenshot();
             storedPlayerName = playerName;
             storedDeathTime = DateTime.Now;
 
             Debug.Log($"Death screenshot captured and stored for {playerName}");
+        }
+
+        internal static void UploadStoredDeathScreenshot(string trigger, bool waitForUpload)
+        {
+            if (storedDeathScreenshot == null)
+            {
+                Debug.Log($"Death screenshot upload skipped on {trigger}: no stored death screenshot found");
+                return;
+            }
+
+            Texture2D screenshot = storedDeathScreenshot!;
+            string playerName = string.IsNullOrEmpty(storedPlayerName) ? "Unknown Player" : storedPlayerName!;
+            DateTime deathTime = storedDeathTime;
+
+            storedDeathScreenshot = null;
+            storedPlayerName = null;
+
+            try
+            {
+                SimpleDiscordWebhook webhook = new SimpleDiscordWebhook(
+                    BepinexConfiguration.WebhookURL.Value,
+                    BepinexConfiguration.WebhookUsername.Value,
+                    BepinexConfiguration.WebhookAvatarURL.Value
+                );
+
+                ScreenshotUploadData uploadData = webhook.ProcessScreenshotForUpload(screenshot);
+                string deathMessage = $"**{playerName}** {BepinexConfiguration.GetRandomDeathMessage()}";
+                string filename = SimpleDiscordWebhook.CreateScreenshotFilename($"{playerName}_death", deathTime);
+
+                Task uploadTask = Task.Run(async () =>
+                {
+                    await webhook.SendFileAsync(uploadData.Data, filename, deathMessage, uploadData.ContentType);
+                });
+
+                if (waitForUpload)
+                {
+                    uploadTask.GetAwaiter().GetResult();
+                    Debug.Log($"Death screenshot uploaded successfully for {playerName} on {trigger}");
+                }
+                else
+                {
+                    _ = LogUploadResultAsync(uploadTask, playerName, trigger);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error processing stored death screenshot on {trigger}: {ex.Message}");
+
+                if (screenshot != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(screenshot);
+                }
+            }
+        }
+
+        private static async Task LogUploadResultAsync(Task uploadTask, string playerName, string trigger)
+        {
+            try
+            {
+                await uploadTask;
+                Debug.Log($"Death screenshot uploaded successfully for {playerName} on {trigger}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error uploading death screenshot on {trigger}: {ex.Message}");
+            }
         }
     }
 
@@ -86,7 +151,7 @@ namespace discordScreenshots.Patches
                 if (PlayerDeathScreenshotPatch.storedDeathScreenshot != null)
                 {
                     Debug.Log($"PlayerRespawnScreenshotPatch: Processing stored death screenshot for {PlayerDeathScreenshotPatch.storedPlayerName}");
-                    ProcessStoredDeathScreenshot();
+                    PlayerDeathScreenshotPatch.UploadStoredDeathScreenshot("respawn", waitForUpload: false);
                 }
                 else
                 {
@@ -98,57 +163,21 @@ namespace discordScreenshots.Patches
                 Debug.LogError($"PlayerRespawnScreenshotPatch: Error: {ex.Message}");
             }
         }
-        
-        private static void ProcessStoredDeathScreenshot()
+    }
+
+    [HarmonyPatch(typeof(Game), "Logout")]
+    public static class GameLogoutDeathScreenshotPatch
+    {
+        [HarmonyPrefix]
+        static void Prefix()
         {
             try
             {
-                // Create webhook instance with proper config
-                var webhook = new SimpleDiscordWebhook(
-                    BepinexConfiguration.WebhookURL.Value,
-                    BepinexConfiguration.WebhookUsername.Value,
-                    BepinexConfiguration.WebhookAvatarURL.Value
-                );
-                
-                // Process screenshot using existing method
-                ScreenshotUploadData uploadData = webhook.ProcessScreenshotForUpload(PlayerDeathScreenshotPatch.storedDeathScreenshot);
-                
-                // Prepare upload data
-                string deathMessage = $"**{PlayerDeathScreenshotPatch.storedPlayerName}** {BepinexConfiguration.GetRandomDeathMessage()}";
-                string filename = SimpleDiscordWebhook.CreateScreenshotFilename(
-                    $"{PlayerDeathScreenshotPatch.storedPlayerName}_death",
-                    PlayerDeathScreenshotPatch.storedDeathTime
-                );
-                
-                // Upload to Discord using existing method (fire and forget)
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await webhook.SendFileAsync(uploadData.Data, filename, deathMessage, uploadData.ContentType);
-                        Debug.Log($"Death screenshot uploaded successfully for {PlayerDeathScreenshotPatch.storedPlayerName}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"Error uploading death screenshot: {ex.Message}");
-                    }
-                });
-                
-                // Cleanup
-                PlayerDeathScreenshotPatch.storedDeathScreenshot = null;
-                PlayerDeathScreenshotPatch.storedPlayerName = null;
+                PlayerDeathScreenshotPatch.UploadStoredDeathScreenshot("logout", waitForUpload: false);
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error processing stored death screenshot: {ex.Message}");
-                
-                // Cleanup on error
-                if (PlayerDeathScreenshotPatch.storedDeathScreenshot != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(PlayerDeathScreenshotPatch.storedDeathScreenshot);
-                    PlayerDeathScreenshotPatch.storedDeathScreenshot = null;
-                    PlayerDeathScreenshotPatch.storedPlayerName = null;
-                }
+                Debug.LogError($"GameLogoutDeathScreenshotPatch: Error: {ex.Message}");
             }
         }
     }

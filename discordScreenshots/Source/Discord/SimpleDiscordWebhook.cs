@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -21,6 +23,7 @@ public class SimpleDiscordWebhook
     private static ScreenshotEncoding _startupScreenshotEncoding = ScreenshotEncoding.Png;
     private static int _startupResolutionWidth;
     private static int _startupResolutionHeight;
+    private static readonly HttpClient WebhookHttpClient = CreateHttpClient();
 
     private readonly Uri _webhookUri;
     private readonly string? _username;
@@ -150,17 +153,17 @@ public class SimpleDiscordWebhook
         }
     }
 
-    public Texture2D CaptureScreenshot()
+    public static Texture2D CaptureScreenshot()
     {
-            // Step 1: Capture screenshot on main thread (fast ~5ms)
-            var screenshot = ScreenCapture.CaptureScreenshotAsTexture();
-            
-            if (screenshot == null)
-            {
-                throw new Exception("Failed to capture screenshot - returned null texture");
-            }
+        // Step 1: Capture screenshot on main thread (fast ~5ms)
+        Texture2D screenshot = ScreenCapture.CaptureScreenshotAsTexture();
 
-            return screenshot;
+        if (screenshot == null)
+        {
+            throw new Exception("Failed to capture screenshot - returned null texture");
+        }
+
+        return screenshot;
     }
 
     public byte[] ProcessScreenshot(Texture2D screenshot)
@@ -243,71 +246,20 @@ public class SimpleDiscordWebhook
     {
         try
         {
-            byte[] byteArray = Encoding.UTF8.GetBytes(jsonPayload);
-
-            // Create the web request
-            WebRequest request = CreateWebhookRequest();
-            request.Method = "POST";
-            request.ContentType = "application/json";
-            request.ContentLength = byteArray.Length;
-
-            // Write the data to the request stream
-            using (Stream dataStream = request.GetRequestStream())
+            using (StringContent content = new StringContent(jsonPayload, Encoding.UTF8, "application/json"))
+            using (HttpResponseMessage response = await WebhookHttpClient.PostAsync(_webhookUri, content))
             {
-                await dataStream.WriteAsync(byteArray, 0, byteArray.Length);
-            }
-
-            // Get the response
-            using (WebResponse response = request.GetResponse())
-            {
-                // Discord webhooks typically return 204 No Content on success
-                if (response is HttpWebResponse httpResponse)
+                string responseText = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
                 {
-                    if (httpResponse.StatusCode != HttpStatusCode.NoContent && 
-                        httpResponse.StatusCode != HttpStatusCode.OK)
-                    {
-                        throw new Exception($"Discord webhook returned status: {httpResponse.StatusCode}");
-                    }
+                    throw new Exception($"Discord webhook returned status: {(int)response.StatusCode} {response.StatusCode} - {responseText}");
                 }
 
-                // Read response if there is one
-                using (Stream responseStream = response.GetResponseStream())
+                if (!string.IsNullOrEmpty(responseText))
                 {
-                    if (responseStream != null)
-                    {
-                        using (StreamReader reader = new StreamReader(responseStream))
-                        {
-                            string responseText = await reader.ReadToEndAsync();
-                            // Log response if needed for debugging
-                            if (!string.IsNullOrEmpty(responseText))
-                            {
-                                UnityEngine.Debug.Log($"Discord response: {responseText}");
-                            }
-                        }
-                    }
+                    UnityEngine.Debug.Log($"Discord response: {responseText}");
                 }
             }
-        }
-        catch (WebException ex)
-        {
-            string errorMessage = "Failed to send webhook message";
-            
-            if (ex.Response is HttpWebResponse errorResponse)
-            {
-                using (Stream errorStream = errorResponse.GetResponseStream())
-                {
-                    if (errorStream != null)
-                    {
-                        using (StreamReader reader = new StreamReader(errorStream))
-                        {
-                            string errorDetails = await reader.ReadToEndAsync();
-                            errorMessage += $": {errorResponse.StatusCode} - {errorDetails}";
-                        }
-                    }
-                }
-            }
-            
-            throw new Exception(errorMessage, ex);
         }
         catch (Exception ex)
         {
@@ -324,68 +276,24 @@ public class SimpleDiscordWebhook
     {
         try
         {
-            // Create the web request for multipart form data
-            WebRequest request = CreateWebhookRequest();
-            request.Method = "POST";
-            request.ContentType = $"multipart/form-data; boundary={boundary}";
-            request.ContentLength = formData.Length;
-
-            // Write the form data to the request stream
-            using (Stream dataStream = request.GetRequestStream())
+            using (ByteArrayContent content = new ByteArrayContent(formData))
             {
-                await dataStream.WriteAsync(formData, 0, formData.Length);
-            }
+                content.Headers.ContentType = MediaTypeHeaderValue.Parse($"multipart/form-data; boundary={boundary}");
 
-            // Get the response
-            using (WebResponse response = request.GetResponse())
-            {
-                // Discord webhooks typically return 204 No Content or 200 OK on success
-                if (response is HttpWebResponse httpResponse)
+                using (HttpResponseMessage response = await WebhookHttpClient.PostAsync(_webhookUri, content))
                 {
-                    if (httpResponse.StatusCode != HttpStatusCode.NoContent && 
-                        httpResponse.StatusCode != HttpStatusCode.OK)
+                    string responseText = await response.Content.ReadAsStringAsync();
+                    if (!response.IsSuccessStatusCode)
                     {
-                        throw new Exception($"Discord webhook returned status: {httpResponse.StatusCode}");
+                        throw new Exception($"Discord webhook returned status: {(int)response.StatusCode} {response.StatusCode} - {responseText}");
                     }
-                }
 
-                // Read response if there is one
-                using (Stream responseStream = response.GetResponseStream())
-                {
-                    if (responseStream != null)
+                    if (!string.IsNullOrEmpty(responseText))
                     {
-                        using (StreamReader reader = new StreamReader(responseStream))
-                        {
-                            string responseText = await reader.ReadToEndAsync();
-                            if (!string.IsNullOrEmpty(responseText))
-                            {
-                                UnityEngine.Debug.Log($"Discord file upload response: {responseText}");
-                            }
-                        }
+                        UnityEngine.Debug.Log($"Discord file upload response: {responseText}");
                     }
                 }
             }
-        }
-        catch (WebException ex)
-        {
-            string errorMessage = "Failed to send webhook file";
-            
-            if (ex.Response is HttpWebResponse errorResponse)
-            {
-                using (Stream errorStream = errorResponse.GetResponseStream())
-                {
-                    if (errorStream != null)
-                    {
-                        using (StreamReader reader = new StreamReader(errorStream))
-                        {
-                            string errorDetails = await reader.ReadToEndAsync();
-                            errorMessage += $": {errorResponse.StatusCode} - {errorDetails}";
-                        }
-                    }
-                }
-            }
-            
-            throw new Exception(errorMessage, ex);
         }
         catch (Exception ex)
         {
@@ -450,17 +358,17 @@ public class SimpleDiscordWebhook
         await stream.WriteAsync(closingBoundary, 0, closingBoundary.Length);
     }
 
-    private WebRequest CreateWebhookRequest()
+    private static HttpClient CreateHttpClient()
     {
-        WebRequest request = WebRequest.Create(_webhookUri);
-        request.Timeout = WebhookRequestTimeoutMilliseconds;
+        ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+        ServicePointManager.Expect100Continue = false;
 
-        if (request is HttpWebRequest httpRequest)
+        HttpClient client = new HttpClient
         {
-            httpRequest.ReadWriteTimeout = WebhookRequestTimeoutMilliseconds;
-        }
-
-        return request;
+            Timeout = TimeSpan.FromMilliseconds(WebhookRequestTimeoutMilliseconds)
+        };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("discord-screenshots");
+        return client;
     }
 
     /// <summary>
