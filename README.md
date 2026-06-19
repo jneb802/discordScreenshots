@@ -10,6 +10,8 @@ A mod to send screenshots to a Discord server.
 ## Death screenshots
 Death screenshots are captured when the player dies and sent to Discord after they respawn.
 
+When Smoothbrain's Resurrection mod is installed, Discord Screenshots temporarily moves Resurrection's active death popup offscreen for the single frame used to capture the death screenshot, then immediately restores it. This keeps the screenshot clean without changing Resurrection's respawn or resurrection behavior.
+
 ## Configuration
 All settings are configurable through the BepInEx config file:
 - Discord webhook URL

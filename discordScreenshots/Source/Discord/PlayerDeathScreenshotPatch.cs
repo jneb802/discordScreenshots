@@ -1,6 +1,7 @@
 using HarmonyLib;
 using System;
 using System.Collections;
+using System.Reflection;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -21,13 +22,132 @@ namespace discordScreenshots.Patches
             // - 0.5f = Capture after ragdoll physics settle (more dramatic)
             // - 1.0f = Capture well after death (aftermath scene)
             yield return new WaitForSeconds(0.1f);
-            
-            // Quick capture and store using existing method
-            storedDeathScreenshot = SimpleDiscordWebhook.CaptureScreenshot();
+
+            IDisposable? resurrectionPopupGuard = HideActiveResurrectionPopupForCapture();
+            try
+            {
+                if (resurrectionPopupGuard != null)
+                {
+                    yield return new WaitForEndOfFrame();
+                }
+
+                // Quick capture and store using existing method
+                storedDeathScreenshot = SimpleDiscordWebhook.CaptureScreenshot();
+            }
+            finally
+            {
+                resurrectionPopupGuard?.Dispose();
+            }
+
             storedPlayerName = playerName;
             storedDeathTime = DateTime.Now;
 
             Debug.Log($"Death screenshot captured and stored for {playerName}");
+        }
+
+        private static IDisposable? HideActiveResurrectionPopupForCapture()
+        {
+            try
+            {
+                if (!TryGetActiveResurrectionPopup(out object activePopup) ||
+                    !TryGetResurrectionPopupBase(activePopup, out object resurrectionPopupBase) ||
+                    !IsTopUnifiedPopup(resurrectionPopupBase))
+                {
+                    return null;
+                }
+
+                UnifiedPopup popupManager = UnifiedPopup.instance;
+                if (popupManager == null)
+                {
+                    return null;
+                }
+
+                Debug.Log("Death screenshot capture: temporarily moving Resurrection popup offscreen");
+                return new PopupOffscreenGuard(popupManager.transform);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Death screenshot capture: could not hide Resurrection popup: {ex.Message}");
+                return null;
+            }
+        }
+
+        private static bool TryGetActiveResurrectionPopup(out object activePopup)
+        {
+            activePopup = null!;
+
+            Type? resurrectionType = GetLoadedResurrectionType();
+            FieldInfo? activePopupField = resurrectionType?.GetField("activePopup", BindingFlags.Static | BindingFlags.NonPublic);
+            object? value = activePopupField?.GetValue(null);
+            if (value == null)
+            {
+                return false;
+            }
+
+            activePopup = value;
+            return true;
+        }
+
+        private static bool TryGetResurrectionPopupBase(object activePopup, out object popupBase)
+        {
+            popupBase = null!;
+
+            FieldInfo? popupField = activePopup.GetType().GetField("Popup", BindingFlags.Instance | BindingFlags.Public);
+            object? value = popupField?.GetValue(activePopup);
+            if (value == null)
+            {
+                return false;
+            }
+
+            popupBase = value;
+            return true;
+        }
+
+        private static bool IsTopUnifiedPopup(object popupBase)
+        {
+            UnifiedPopup popupManager = UnifiedPopup.instance;
+            return popupManager != null &&
+                   popupManager.popupStack != null &&
+                   popupManager.popupStack.Count > 0 &&
+                   ReferenceEquals(popupManager.popupStack.Peek(), popupBase);
+        }
+
+        private static Type? GetLoadedResurrectionType()
+        {
+            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (assembly.GetName().Name == "Resurrection")
+                {
+                    return assembly.GetType("Resurrection.Resurrection");
+                }
+            }
+
+            return null;
+        }
+
+        private sealed class PopupOffscreenGuard : IDisposable
+        {
+            private readonly Transform _transform;
+            private readonly Vector3 _originalLocalPosition;
+            private bool _disposed;
+
+            public PopupOffscreenGuard(Transform transform)
+            {
+                _transform = transform;
+                _originalLocalPosition = transform.localPosition;
+                transform.localPosition = _originalLocalPosition + new Vector3(10000f, 0f, 0f);
+            }
+
+            public void Dispose()
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _transform.localPosition = _originalLocalPosition;
+                _disposed = true;
+            }
         }
 
         internal static void UploadStoredDeathScreenshot(string trigger, bool waitForUpload)
