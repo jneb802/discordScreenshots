@@ -29,7 +29,7 @@ A Valheim BepInEx mod that captures in-game screenshots and sends them to Discor
 
 The build uses `dotnet build` targeting .NET Framework 4.7.2. The output DLL includes the version in its name (e.g., `discordScreenshots.1.4.0.dll`).
 
-**Version** is tracked in three places that must stay in sync: `discordScreenshots.csproj` (AssemblyVersion + Version), `Source/Plugin.cs` (ModVersion), and `build.sh` (VERSION).
+**Version** is tracked in four places that must stay in sync: `discordScreenshots.csproj` (AssemblyVersion + Version), `Properties/AssemblyInfo.cs` (AssemblyVersion + AssemblyFileVersion), `Source/Plugin.cs` (ModVersion), and `build.sh` (VERSION).
 
 ## Architecture
 
