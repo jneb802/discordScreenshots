@@ -62,7 +62,7 @@ namespace discordScreenshots.Patches
                         UnityEngine.Debug.LogError($"Failed to send Discord message: {ex.Message}");
                     }
                 });
-            }));
+            }), hideBehindDevCommands: false);
 
             // Add discordtest command to test webhook connection
             new Terminal.ConsoleCommand("discordtest", "tests the Discord webhook connection", (Terminal.ConsoleEvent)(args =>
@@ -93,7 +93,7 @@ namespace discordScreenshots.Patches
                         UnityEngine.Debug.LogError($"Discord webhook test failed: {ex.Message}");
                     }
                 });
-            }));
+            }), hideBehindDevCommands: false);
 
             // Add discordscreenshot command to capture and send actual screenshots
             new Terminal.ConsoleCommand("discordscreenshot", "captures and sends a screenshot to Discord", (Terminal.ConsoleEvent)(args =>
@@ -165,7 +165,7 @@ namespace discordScreenshots.Patches
                     args.Context?.AddString($"Error: {ex.Message}");
                     UnityEngine.Debug.LogError($"Failed to capture screenshot: {ex.Message}");
                 }
-            }));
+            }), hideBehindDevCommands: false);
         }
     }
 }
