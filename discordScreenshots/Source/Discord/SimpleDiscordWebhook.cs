@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -18,11 +19,6 @@ public class SimpleDiscordWebhook
 {
     private const int LargeScreenshotPixelThreshold = 4_000_000;
     private const int LargeScreenshotJpegQuality = 90;
-    private const int WebhookRequestTimeoutMilliseconds = 15000;
-
-    private static ScreenshotEncoding _startupScreenshotEncoding = ScreenshotEncoding.Png;
-    private static int _startupResolutionWidth;
-    private static int _startupResolutionHeight;
     private static readonly HttpClient WebhookHttpClient = CreateHttpClient();
 
     private readonly Uri _webhookUri;
@@ -47,39 +43,14 @@ public class SimpleDiscordWebhook
         _avatarUrl = NormalizeOptionalText(avatarUrl);
     }
 
-    public static void ConfigureScreenshotEncodingForStartupResolution()
-    {
-        int width = Screen.width;
-        int height = Screen.height;
-
-        if (width <= 0 || height <= 0)
-        {
-            Resolution currentResolution = Screen.currentResolution;
-            width = currentResolution.width;
-            height = currentResolution.height;
-        }
-
-        ConfigureScreenshotEncoding(width, height);
-    }
-
-    public static void ConfigureScreenshotEncoding(int width, int height)
-    {
-        _startupResolutionWidth = Math.Max(0, width);
-        _startupResolutionHeight = Math.Max(0, height);
-
-        long pixelCount = (long)_startupResolutionWidth * _startupResolutionHeight;
-        _startupScreenshotEncoding = pixelCount >= LargeScreenshotPixelThreshold
-            ? ScreenshotEncoding.Jpeg
-            : ScreenshotEncoding.Png;
-
-        UnityEngine.Debug.Log(
-            $"DiscordScreenshots: startup resolution {_startupResolutionWidth}x{_startupResolutionHeight}; " +
-            $"using {GetScreenshotFormatName()} for screenshot uploads.");
-    }
-
     public static string CreateScreenshotFilename(string baseName, DateTime timestamp)
     {
-        return $"{baseName}_{timestamp:yyyy-MM-dd_HH-mm-ss}.{GetScreenshotExtension()}";
+        return CreateScreenshotFilename(baseName, timestamp, "png");
+    }
+
+    public static string CreateScreenshotFilename(string baseName, DateTime timestamp, string extension)
+    {
+        return $"{baseName}_{timestamp:yyyy-MM-dd_HH-mm-ss}.{extension}";
     }
 
     /// <summary>
@@ -125,10 +96,8 @@ public class SimpleDiscordWebhook
     {
         try
         {
-            filename = NormalizeScreenshotFilename(filename);
-
             // Step 1: Capture screenshot on main thread (fast ~5ms)
-            var screenshot = ScreenCapture.CaptureScreenshotAsTexture();
+            Texture2D screenshot = ScreenCapture.CaptureScreenshotAsTexture();
             
             if (screenshot == null)
             {
@@ -137,9 +106,7 @@ public class SimpleDiscordWebhook
 
             // Step 2: Encode on main thread. Unity texture encoding must run here.
             ScreenshotUploadData uploadData = ProcessScreenshotForUpload(screenshot);
-
-            UnityEngine.Debug.Log(
-                $"Screenshot captured and encoded as {uploadData.FormatName} - {uploadData.Data.Length} bytes, uploading...");
+            filename = NormalizeScreenshotFilename(filename, uploadData.Extension);
 
             // Step 4: Upload to Discord on background thread (network operation)
             await Task.Run(async () =>
@@ -173,12 +140,19 @@ public class SimpleDiscordWebhook
 
     public ScreenshotUploadData ProcessScreenshotForUpload(Texture2D screenshot)
     {
+        int width = screenshot.width;
+        int height = screenshot.height;
+        long pixelCount = (long)width * height;
+        ScreenshotEncoding screenshotEncoding = pixelCount >= LargeScreenshotPixelThreshold
+            ? ScreenshotEncoding.Jpeg
+            : ScreenshotEncoding.Png;
+
         byte[] encodedData;
         string extension;
         string contentType;
         string formatName;
 
-        if (_startupScreenshotEncoding == ScreenshotEncoding.Jpeg)
+        if (screenshotEncoding == ScreenshotEncoding.Jpeg)
         {
             encodedData = screenshot.EncodeToJPG(LargeScreenshotJpegQuality);
             extension = "jpg";
@@ -200,6 +174,10 @@ public class SimpleDiscordWebhook
         {
             throw new Exception($"Failed to encode screenshot to {formatName}");
         }
+
+        UnityEngine.Debug.Log(
+            $"Screenshot captured at {width}x{height} and encoded as {formatName} - " +
+            $"{encodedData.Length} bytes, uploading...");
 
         return new ScreenshotUploadData(encodedData, extension, contentType, formatName);
     }
@@ -244,10 +222,16 @@ public class SimpleDiscordWebhook
     /// <param name="jsonPayload">The JSON payload to send</param>
     private async Task SendPayloadAsync(string jsonPayload)
     {
+        using CancellationTokenSource timeoutSource = CreateWebhookTimeoutSource(out int timeoutSeconds);
+
         try
         {
             using (StringContent content = new StringContent(jsonPayload, Encoding.UTF8, "application/json"))
-            using (HttpResponseMessage response = await WebhookHttpClient.PostAsync(_webhookUri, content))
+            using (HttpResponseMessage response = await WebhookHttpClient.PostAsync(
+                _webhookUri,
+                content,
+                timeoutSource.Token
+            ))
             {
                 string responseText = await response.Content.ReadAsStringAsync();
                 if (!response.IsSuccessStatusCode)
@@ -260,6 +244,13 @@ public class SimpleDiscordWebhook
                     UnityEngine.Debug.Log($"Discord response: {responseText}");
                 }
             }
+        }
+        catch (OperationCanceledException ex) when (timeoutSource.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"Discord webhook request timed out after {timeoutSeconds} seconds.",
+                ex
+            );
         }
         catch (Exception ex)
         {
@@ -274,13 +265,19 @@ public class SimpleDiscordWebhook
     /// <param name="boundary">The multipart boundary string</param>
     private async Task SendMultipartPayloadAsync(byte[] formData, string boundary)
     {
+        using CancellationTokenSource timeoutSource = CreateWebhookTimeoutSource(out int timeoutSeconds);
+
         try
         {
             using (ByteArrayContent content = new ByteArrayContent(formData))
             {
                 content.Headers.ContentType = MediaTypeHeaderValue.Parse($"multipart/form-data; boundary={boundary}");
 
-                using (HttpResponseMessage response = await WebhookHttpClient.PostAsync(_webhookUri, content))
+                using (HttpResponseMessage response = await WebhookHttpClient.PostAsync(
+                    _webhookUri,
+                    content,
+                    timeoutSource.Token
+                ))
                 {
                     string responseText = await response.Content.ReadAsStringAsync();
                     if (!response.IsSuccessStatusCode)
@@ -294,6 +291,13 @@ public class SimpleDiscordWebhook
                     }
                 }
             }
+        }
+        catch (OperationCanceledException ex) when (timeoutSource.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"Discord webhook file upload timed out after {timeoutSeconds} seconds for {formData.Length} bytes.",
+                ex
+            );
         }
         catch (Exception ex)
         {
@@ -365,10 +369,16 @@ public class SimpleDiscordWebhook
 
         HttpClient client = new HttpClient
         {
-            Timeout = TimeSpan.FromMilliseconds(WebhookRequestTimeoutMilliseconds)
+            Timeout = Timeout.InfiniteTimeSpan
         };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("discord-screenshots");
         return client;
+    }
+
+    private static CancellationTokenSource CreateWebhookTimeoutSource(out int timeoutSeconds)
+    {
+        timeoutSeconds = BepinexConfiguration.WebhookTimeoutSeconds.Value;
+        return new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
     }
 
     /// <summary>
@@ -429,10 +439,8 @@ public class SimpleDiscordWebhook
             .ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
-    private static string NormalizeScreenshotFilename(string? filename)
+    private static string NormalizeScreenshotFilename(string? filename, string extension)
     {
-        string extension = GetScreenshotExtension();
-
         if (string.IsNullOrEmpty(filename))
         {
             return $"valheim_screenshot_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.{extension}";
@@ -517,17 +525,6 @@ public class SimpleDiscordWebhook
         return trimmedValue.Length == 0 ? null : trimmedValue;
     }
 
-    private static string GetScreenshotExtension()
-    {
-        return _startupScreenshotEncoding == ScreenshotEncoding.Jpeg ? "jpg" : "png";
-    }
-
-    private static string GetScreenshotFormatName()
-    {
-        return _startupScreenshotEncoding == ScreenshotEncoding.Jpeg
-            ? $"JPEG quality {LargeScreenshotJpegQuality}"
-            : "PNG";
-    }
 }
 
 public sealed class ScreenshotUploadData

@@ -33,7 +33,6 @@ namespace discordScreenshots
             // LoadAssetBundle();
 
             BepinexConfiguration.GenerateConfigs(Config);
-            SimpleDiscordWebhook.ConfigureScreenshotEncodingForStartupResolution();
 
             // // Initialize our custom pieces with asset bundle
             // PrefabUtils.Initialize();

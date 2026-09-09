@@ -15,6 +15,9 @@ All settings are configurable through the BepInEx config file:
 - Discord webhook URL
 - Screenshot hotkey (default: F12)
 - Webhook username and avatar
+- Discord request timeout (default: 60 seconds)
+
+Screenshots with at least four million pixels use JPEG to reduce upload size. Smaller screenshots use PNG. The mod checks the captured image dimensions for each screenshot, so resolution changes made after startup are supported.
 
 ## Discord Setup
 1. Create a Discord webhook in your desired channel

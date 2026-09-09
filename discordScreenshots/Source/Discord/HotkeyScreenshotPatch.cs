@@ -46,7 +46,8 @@ namespace discordScreenshots.Patches
                     string screenshotMessage = $"📸 **{playerName}** {messageText}";
                     string filename = SimpleDiscordWebhook.CreateScreenshotFilename(
                         $"{playerName}_screenshot",
-                        DateTime.Now
+                        DateTime.Now,
+                        "png"
                     );
 
                     _ = SendHotkeyScreenshotAsync(

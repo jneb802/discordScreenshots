@@ -44,8 +44,8 @@ All game behavior modifications use Harmony patches on Valheim classes:
 
 ### Core Components
 
-- **SimpleDiscordWebhook.cs** — Handles all Discord webhook communication. Captures screenshots via `ScreenCapture.CaptureScreenshotAsTexture()` on the Unity main thread, encodes to PNG, then uploads via multipart form data on a background thread. Uses `System.Net.WebRequest` (not HttpClient).
-- **BepinExConfiguration.cs** — All config entries (webhook URL, username, avatar URL, death message, screenshot hotkey). Config is synced between server/clients where noted.
+- **SimpleDiscordWebhook.cs** — Handles all Discord webhook communication. Captures screenshots via `ScreenCapture.CaptureScreenshotAsTexture()` on the Unity main thread, selects PNG or JPEG from the captured texture dimensions, then uploads via multipart form data on a background thread. Uses a shared `HttpClient` with a per-request timeout.
+- **BepinExConfiguration.cs** — All config entries (webhook URL, username, avatar URL, request timeout, death message, screenshot hotkey). Config is synced between server/clients where noted.
 - **Plugin.cs** — BepInEx entry point. Applies all Harmony patches via `HarmonyInstance.PatchAll()` and sets up a `FileSystemWatcher` for live config reloading.
 
 ### Inactive Code
