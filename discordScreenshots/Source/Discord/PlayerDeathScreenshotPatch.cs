@@ -55,7 +55,11 @@ namespace discordScreenshots.Patches
 
                 ScreenshotUploadData uploadData = webhook.ProcessScreenshotForUpload(screenshot);
                 string deathMessage = $"**{playerName}** {BepinexConfiguration.GetRandomDeathMessage()}";
-                string filename = SimpleDiscordWebhook.CreateScreenshotFilename($"{playerName}_death", deathTime);
+                string filename = SimpleDiscordWebhook.CreateScreenshotFilename(
+                    $"{playerName}_death",
+                    deathTime,
+                    uploadData.Extension
+                );
 
                 Task uploadTask = Task.Run(async () =>
                 {

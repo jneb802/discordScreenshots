@@ -14,6 +14,7 @@ public class BepinexConfiguration
     public static ConfigEntry<string> WebhookURL;
     public static ConfigEntry<string> WebhookUsername;
     public static ConfigEntry<string> WebhookAvatarURL;
+    public static ConfigEntry<int> WebhookTimeoutSeconds = null!;
     public static ConfigEntry<string> DeathMessage;
     public static ConfigEntry<KeyCode> ScreenshotHotkey;
 
@@ -102,6 +103,15 @@ public class BepinexConfiguration
         WebhookURL = Config.BindConfig("Webhook", "URL", "", "The URL of the Discord webhook to send messages to.", synced: true, order: 2);
         WebhookUsername = Config.BindConfig("Webhook", "Username", "Valheim Death Bot", "The username of the Discord webhook to send messages to.", synced: true, order: 3);
         WebhookAvatarURL = Config.BindConfig("Webhook", "AvatarURL", "", "The avatar URL of the Discord webhook to send messages to.", synced: true, order: 4);
+        WebhookTimeoutSeconds = Config.BindConfig(
+            "Webhook",
+            "TimeoutSeconds",
+            60,
+            "The maximum time to wait for each Discord webhook request.",
+            synced: false,
+            order: 10,
+            acceptableValues: new AcceptableValueRange<int>(5, 600)
+        );
         DeathMessage = Config.BindConfig("Death Screenshot", "Message", "met their demise! Final moments captured...", "The message to send with death screenshots (player name will be prepended automatically).", synced: true, order: 5);
 
         HotkeyScreenshotWebhookURL = Config.BindConfig("Player Capture Webhook", "URL", "", "Optional separate webhook URL for player capture (F12) screenshots. If empty, uses the main Webhook URL.", synced: true, order: 6);

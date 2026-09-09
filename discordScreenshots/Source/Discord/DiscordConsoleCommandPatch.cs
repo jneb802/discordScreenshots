@@ -123,24 +123,26 @@ namespace discordScreenshots.Patches
                 try
                 {
                     // Create webhook instance
-                    var webhook = new SimpleDiscordWebhook(
+                    SimpleDiscordWebhook webhook = new SimpleDiscordWebhook(
                         BepinexConfiguration.GetWebhookURL(),
                         "Valheim Screenshots"
                     );
 
-                    string filename = SimpleDiscordWebhook.CreateScreenshotFilename(
-                        $"{playerName}_screenshot",
-                        DateTime.Now
-                    );
+                    DateTime screenshotTime = DateTime.Now;
 
                     // Capture screenshot synchronously on main thread
-                    var screenshot = ScreenCapture.CaptureScreenshotAsTexture();
+                    Texture2D screenshot = ScreenCapture.CaptureScreenshotAsTexture();
                     if (screenshot == null)
                     {
                         throw new Exception("Failed to capture screenshot");
                     }
 
                     ScreenshotUploadData uploadData = webhook.ProcessScreenshotForUpload(screenshot);
+                    string filename = SimpleDiscordWebhook.CreateScreenshotFilename(
+                        $"{playerName}_screenshot",
+                        screenshotTime,
+                        uploadData.Extension
+                    );
 
                     args.Context?.AddString($"Screenshot captured, uploading to Discord...");
 

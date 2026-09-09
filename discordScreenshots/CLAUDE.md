@@ -29,7 +29,7 @@ A Valheim BepInEx mod that captures in-game screenshots and sends them to Discor
 
 The build uses `dotnet build` targeting .NET Framework 4.7.2. The output DLL includes the version in its name (e.g., `discordScreenshots.1.4.0.dll`).
 
-**Version** is tracked in three places that must stay in sync: `discordScreenshots.csproj` (AssemblyVersion + Version), `Source/Plugin.cs` (ModVersion), and `build.sh` (VERSION).
+**Version** is tracked in four places that must stay in sync: `discordScreenshots.csproj` (AssemblyVersion + Version), `Properties/AssemblyInfo.cs` (AssemblyVersion + AssemblyFileVersion), `Source/Plugin.cs` (ModVersion), and `build.sh` (VERSION).
 
 ## Architecture
 
@@ -44,8 +44,8 @@ All game behavior modifications use Harmony patches on Valheim classes:
 
 ### Core Components
 
-- **SimpleDiscordWebhook.cs** — Handles all Discord webhook communication. Captures screenshots via `ScreenCapture.CaptureScreenshotAsTexture()` on the Unity main thread, encodes to PNG, then uploads via multipart form data on a background thread. Uses `System.Net.WebRequest` (not HttpClient).
-- **BepinExConfiguration.cs** — All config entries (webhook URL, username, avatar URL, death message, screenshot hotkey). Config is synced between server/clients where noted.
+- **SimpleDiscordWebhook.cs** — Handles all Discord webhook communication. Captures screenshots via `ScreenCapture.CaptureScreenshotAsTexture()` on the Unity main thread, selects PNG or JPEG from the captured texture dimensions, then uploads via multipart form data on a background thread. Uses a shared `HttpClient` with a per-request timeout.
+- **BepinExConfiguration.cs** — All config entries (webhook URL, username, avatar URL, request timeout, death message, screenshot hotkey). Config is synced between server/clients where noted.
 - **Plugin.cs** — BepInEx entry point. Applies all Harmony patches via `HarmonyInstance.PatchAll()` and sets up a `FileSystemWatcher` for live config reloading.
 
 ### Inactive Code
