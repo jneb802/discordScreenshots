@@ -1,4 +1,4 @@
-![DiscordScreenshots](https://i.imgur.com/HiPcG3M.gif)
+![DiscordScreenshots](https://i.imgur.com/7yag6kE.png)
 
 # Discord Screenshots
 A mod to send screenshots to a Discord server. 
